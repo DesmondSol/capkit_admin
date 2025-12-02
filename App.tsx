@@ -13,20 +13,29 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [timeoutError, setTimeoutError] = useState(false);
 
+  console.log("App component loaded.");
+
   useEffect(() => {
     // Safety timeout in case Firebase fails to connect silently
     const timer = setTimeout(() => {
       if (loading) setTimeoutError(true);
-    }, 8000);
+    }, 10000);
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-      clearTimeout(timer);
-    });
+    let unsubscribe: any;
+    try {
+        unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+          console.log("Auth state changed:", currentUser?.email);
+          setUser(currentUser);
+          setLoading(false);
+          clearTimeout(timer);
+        });
+    } catch (e) {
+        console.error("Auth init failed:", e);
+        setTimeoutError(true);
+    }
 
     return () => {
-        unsubscribe();
+        if(unsubscribe) unsubscribe();
         clearTimeout(timer);
     };
   }, []);
@@ -94,7 +103,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
-          <p className="text-slate-500 text-sm font-medium">Loading CapKit Admin...</p>
+          <p className="text-slate-500 text-sm font-medium">Connecting to Firebase...</p>
         </div>
       </div>
     );
