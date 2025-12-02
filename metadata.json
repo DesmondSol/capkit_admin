@@ -1,0 +1,5 @@
+{
+  "name": "CapKit Admin Dashboard",
+  "description": "A comprehensive AI-powered admin dashboard for CapKit to track users, evaluate startups with strict VC criteria, and analyze platform usage using Firebase and Gemini 2.5.",
+  "requestFramePermissions": []
+}
