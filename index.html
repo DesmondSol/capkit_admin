@@ -25,9 +25,25 @@
     </script>
     <script>
       // Polyfill process.env for Gemini SDK
-      if (typeof window !== 'undefined' && !window.process) {
-        window.process = { env: { API_KEY: '' } };
+      if (typeof window !== 'undefined') {
+        window.process = window.process || {};
+        window.process.env = window.process.env || {};
+        window.process.env.API_KEY = ''; // Handled by SDK usage
       }
+
+      // Global error handler to catch script loading errors
+      window.addEventListener('error', function(e) {
+        console.error('Global Error caught:', e.message);
+        const root = document.getElementById('root');
+        if (root && root.innerHTML === '') {
+           // Only show if nothing rendered
+           const errDiv = document.createElement('div');
+           errDiv.style.padding = '20px';
+           errDiv.style.color = 'red';
+           errDiv.innerText = 'System Error: ' + e.message;
+           document.body.appendChild(errDiv);
+        }
+      });
     </script>
     <style>
       /* Custom scrollbar for webkit */
@@ -50,8 +66,8 @@
 {
   "imports": {
     "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
+    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
     "firebase/app": "https://aistudiocdn.com/firebase@^12.6.0/app",
     "firebase/auth": "https://aistudiocdn.com/firebase@^12.6.0/auth",
     "firebase/firestore": "https://aistudiocdn.com/firebase@^12.6.0/firestore",
@@ -59,7 +75,9 @@
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
     "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/"
   }
 }
 </script>
