@@ -1,8 +1,4 @@
 import { UserProfile, StartupData, UserRole, Investor } from "../types";
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/firestore';
-
-const Timestamp = firebase.firestore.Timestamp;
 
 export const MOCK_USERS: UserProfile[] = [
     {
@@ -11,8 +7,8 @@ export const MOCK_USERS: UserProfile[] = [
         displayName: 'CapKit Admin',
         role: UserRole.ADMIN,
         isActive: true,
-        createdAt: Timestamp.now(),
-        lastLogin: Timestamp.now()
+        createdAt: new Date(),
+        lastLogin: new Date()
     },
     {
         id: 'u2',
@@ -20,8 +16,8 @@ export const MOCK_USERS: UserProfile[] = [
         displayName: 'Sarah Chen',
         role: UserRole.STARTUP,
         isActive: true,
-        createdAt: Timestamp.now(),
-        lastLogin: Timestamp.now()
+        createdAt: new Date(),
+        lastLogin: new Date()
     },
     {
         id: 'u3',
@@ -29,8 +25,8 @@ export const MOCK_USERS: UserProfile[] = [
         displayName: 'Marcus Sterling',
         role: UserRole.INVESTOR,
         isActive: false,
-        createdAt: Timestamp.now(),
-        lastLogin: Timestamp.now()
+        createdAt: new Date(),
+        lastLogin: new Date()
     }
 ];
 

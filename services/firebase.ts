@@ -1,7 +1,7 @@
-import firebase from "firebase/compat/app";
-import "firebase/compat/auth";
-import "firebase/compat/firestore";
-import "firebase/compat/analytics";
+import { initializeApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from "firebase/auth";
+import { getFirestore, collection, doc, getDoc, getDocs, updateDoc, setDoc, addDoc, query, where, Timestamp } from "firebase/firestore";
+import { getAnalytics } from "firebase/analytics";
 import { StartupData, UserProfile, CanvasData, Investor, ProgramStats } from "../types";
 
 const firebaseConfig = {
@@ -15,83 +15,64 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
-const app = firebase.app();
-export const auth = firebase.auth();
-export const db = firebase.firestore();
-export const analytics = firebase.analytics();
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+export const analytics = getAnalytics(app);
 
-// Export User type for use in components
-export type User = firebase.User;
+// Export Auth functions
+export { signInWithEmailAndPassword, signOut, onAuthStateChanged };
+export type { User };
 
-// Auth Functions wrapped to match existing import signatures
-export const signInWithEmailAndPassword = (authArg: firebase.auth.Auth, email: string, pass: string) => {
-  return authArg.signInWithEmailAndPassword(email, pass);
-};
-export const signOut = (authArg: firebase.auth.Auth) => authArg.signOut();
-export const onAuthStateChanged = (authArg: firebase.auth.Auth, nextOrObserver: any) => authArg.onAuthStateChanged(nextOrObserver);
-
-// Firestore Collections
-export const usersCol = db.collection('users');
-export const startupsMetaCol = db.collection('startups'); 
-export const investorsCol = db.collection('investor_registrations');
-export const reportsCol = db.collection('reports');
-
-// Data Helper Functions
+// --- Data Helper Functions ---
 
 // Aggregates User Profile + Workspace Canvas + Admin Metadata
 export const getAggregatedStartups = async (): Promise<StartupData[]> => {
   try {
-    // 1. Fetch all users
-    const usersSnapshot = await usersCol.get();
+    const usersRef = collection(db, 'users');
+    const usersSnapshot = await getDocs(usersRef);
     const users = usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile));
     
-    // Filter for likely startups (or just take all if roles aren't strictly set)
-    // For now, we process all users to see if they have a canvas
     const startupsPromises = users.map(async (user) => {
       // 2. Fetch Canvas Data from /workspaces/{userId}/modules/canvas
       let canvasData: CanvasData | undefined = undefined;
-      const workspaceRef = db.collection('workspaces').doc(user.id).collection('modules');
+      const workspaceModulesRef = collection(db, 'workspaces', user.id, 'modules');
+      const canvasDocRef = doc(workspaceModulesRef, 'canvas');
       
-      const canvasSnap = await workspaceRef.doc('canvas').get();
+      const canvasSnap = await getDoc(canvasDocRef);
       
-      if (canvasSnap.exists) {
+      if (canvasSnap.exists()) {
         canvasData = canvasSnap.data() as CanvasData;
       }
 
-      // If no canvas, this user might not be a startup or hasn't started yet
-      // However, we might want to check if they have OTHER modules to confirm startup status
+      // Check startup role or existence of canvas
       if (!canvasData) {
          if (user.role !== 'startup') return null;
       }
 
-      // Check existence of other modules for the "Progress" indicator on the card
+      // Check existence of other modules
       const moduleCheckPromise = ['economics', 'productDesign', 'sales'].map(async (mod) => {
-          const s = await workspaceRef.doc(mod).get();
-          return { name: mod, exists: s.exists };
+          const modDocRef = doc(workspaceModulesRef, mod);
+          const s = await getDoc(modDocRef);
+          return { name: mod, exists: s.exists() };
       });
       const moduleResults = await Promise.all(moduleCheckPromise);
       const moduleProgress: {[key:string]: boolean} = {};
       moduleResults.forEach(r => moduleProgress[r.name] = r.exists);
       if (canvasData) moduleProgress['canvas'] = true;
 
+      // 3. Fetch Admin Metadata
+      const metaRef = doc(db, 'startups', user.id);
+      const metaSnap = await getDoc(metaRef);
+      const metaData = metaSnap.exists() ? (metaSnap.data() || {}) : {};
 
-      // 3. Fetch Admin Metadata (Favorites, previous AI evals) from our internal collection
-      const metaRef = db.collection('startups').doc(user.id);
-      const metaSnap = await metaRef.get();
-      const metaData = metaSnap.exists ? (metaSnap.data() || {}) : {};
-
-      // 4. Map to StartupData interface
-      // NOTE: Database keys have spaces, so we access them via bracket notation
+      // 4. Map to StartupData
       return {
         id: user.id,
         name: user.displayName || 'Unknown Venture',
         founderName: user.displayName || 'Unknown Founder',
         founderBio: metaData.founderBio || 'Profile not yet enriched.',
         
-        // Map Canvas Blocks to Description
         shortDescription: canvasData?.["Unique Value Proposition"] || canvasData?.["Project Overview"] || 'No Value Proposition defined yet.',
         
         fullDescription: canvasData?.["Solution"] 
@@ -101,7 +82,6 @@ export const getAggregatedStartups = async (): Promise<StartupData[]> => {
         stage: metaData.stage || 'Idea',
         sector: metaData.sector || 'General',
         
-        // Map Canvas Blocks to Analysis Fields
         businessModel: canvasData?.["Business Model"] || canvasData?.["Pricing"] || canvasData?.["Unit Economics"] || 'Revenue streams not defined.',
         traction: canvasData?.["North Star Metric"] || canvasData?.["Product - Market Fit"] || 'Key metrics not tracked.',
         
@@ -110,7 +90,6 @@ export const getAggregatedStartups = async (): Promise<StartupData[]> => {
         aiEvaluation: metaData.aiEvaluation || undefined,
         askAmount: metaData.askAmount || 0,
         
-        // Store raw canvas for the detail view
         canvas: canvasData,
         moduleProgress: moduleProgress
       } as StartupData;
@@ -128,13 +107,11 @@ export const getAggregatedStartups = async (): Promise<StartupData[]> => {
 const calculateReadiness = (canvas?: CanvasData): number => {
   if (!canvas) return 0;
   let score = 0;
-  // Simple heuristic: 10-15 points for each filled major block
-  // Using the database keys with spaces
   if (canvas["Problem"]) score += 10;
   if (canvas["Solution"]) score += 10;
-  if (canvas["Unique Value Proposition"]) score += 15; // Weighted higher
+  if (canvas["Unique Value Proposition"]) score += 15; 
   if (canvas["Market"] || canvas["Customer Segments"]) score += 10;
-  if (canvas["Business Model"] || canvas["Revenue Streams"]) score += 15; // Weighted higher
+  if (canvas["Business Model"] || canvas["Revenue Streams"]) score += 15;
   if (canvas["Unit Economics"] || canvas["Cost Structure"]) score += 10;
   if (canvas["North Star Metric"] || canvas["Key Metrics"]) score += 10;
   if (canvas["Unfair Advantage"]) score += 10;
@@ -143,22 +120,21 @@ const calculateReadiness = (canvas?: CanvasData): number => {
 };
 
 export const toggleUserAccess = async (userId: string, currentStatus: boolean) => {
-  const userRef = db.collection('users').doc(userId);
-  await userRef.update({ isActive: !currentStatus });
+  const userRef = doc(db, 'users', userId);
+  await updateDoc(userRef, { isActive: !currentStatus });
 };
 
-// Update AI data in the METADATA collection, not the user's workspace
 export const updateStartupAiData = async (startupId: string, aiData: any) => {
-  const startupRef = db.collection('startups').doc(startupId);
-  await startupRef.set({ aiEvaluation: aiData }, { merge: true });
+  const startupRef = doc(db, 'startups', startupId);
+  await setDoc(startupRef, { aiEvaluation: aiData }, { merge: true });
 };
 
 export const toggleStartupFavorite = async (startupId: string, currentStatus: boolean) => {
-  const startupRef = db.collection('startups').doc(startupId);
-  await startupRef.set({ isFavorite: !currentStatus }, { merge: true });
+  const startupRef = doc(db, 'startups', startupId);
+  await setDoc(startupRef, { isFavorite: !currentStatus }, { merge: true });
 };
 
-// --- DEEP SCAN FUNCTIONALITY ---
+// --- DEEP SCAN ---
 
 const TARGET_MODULES = [
     'canvas',
@@ -173,8 +149,8 @@ const TARGET_MODULES = [
 
 export const getDeepProgramStats = async (): Promise<ProgramStats> => {
     try {
-        const usersSnap = await usersCol.get();
-        // Assuming all users in 'users' collection are potential startups for this scan
+        const usersRef = collection(db, 'users');
+        const usersSnap = await getDocs(usersRef);
         const totalUsers = usersSnap.size;
         
         const moduleCounts: Record<string, number> = {};
@@ -182,24 +158,19 @@ export const getDeepProgramStats = async (): Promise<ProgramStats> => {
         
         const samples: string[] = [];
 
-        // This can be heavy, in production use Cloud Functions. 
-        // For client-side admin dashboard, we process in batches or just Promise.all if < 500 users.
         const userPromises = usersSnap.docs.map(async (userDoc) => {
             const userId = userDoc.id;
-            const modulesRef = db.collection('workspaces').doc(userId).collection('modules');
             
-            // Check each module
             for (const mod of TARGET_MODULES) {
-                const docSnap = await modulesRef.doc(mod).get();
-                if (docSnap.exists) {
+                const docRef = doc(db, 'workspaces', userId, 'modules', mod);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
                     moduleCounts[mod]++;
                     
-                    // Extract a sample for AI (anonymized snippet)
-                    // We only take 1 sample per module type globally to save tokens/complexity
                     if (samples.length < 5 && Math.random() > 0.8) {
                         const data = docSnap.data();
                         if (data) {
-                            const sampleText = JSON.stringify(data).substring(0, 100); // truncated
+                            const sampleText = JSON.stringify(data).substring(0, 100);
                             samples.push(`[${mod}]: ${sampleText}...`);
                         }
                     }
@@ -215,7 +186,6 @@ export const getDeepProgramStats = async (): Promise<ProgramStats> => {
             completionRate: totalUsers > 0 ? Math.round((moduleCounts[name] / totalUsers) * 100) : 0
         }));
 
-        // Find bottleneck (module with lowest non-zero score, or just lowest)
         const sortedStats = [...moduleStats].sort((a, b) => a.completionRate - b.completionRate);
         const topBottleneck = sortedStats[0]?.name || 'None';
 
@@ -237,18 +207,17 @@ export const getDeepProgramStats = async (): Promise<ProgramStats> => {
     }
 };
 
-// --- INVESTOR FUNCTIONS ---
+// --- INVESTORS ---
 
 export const getInvestors = async (): Promise<Investor[]> => {
     try {
-        const snapshot = await investorsCol.get();
+        const invRef = collection(db, 'investor_registrations');
+        const snapshot = await getDocs(invRef);
         return snapshot.docs.map(d => {
             const data = d.data();
-            // Normalize data structure
             return { 
                 id: d.id, 
                 ...data,
-                // Ensure name and firm are populated regardless of field naming convention
                 fullName: data.fullName || data.name || 'Unknown Investor',
                 firmName: data.firmName || data.firm || 'Independent',
                 status: data.status || 'pending'
@@ -261,6 +230,6 @@ export const getInvestors = async (): Promise<Investor[]> => {
 };
 
 export const updateInvestorStatus = async (id: string, status: 'approved' | 'rejected') => {
-    const ref = db.collection('investor_registrations').doc(id);
-    await ref.update({ status });
+    const ref = doc(db, 'investor_registrations', id);
+    await updateDoc(ref, { status });
 };

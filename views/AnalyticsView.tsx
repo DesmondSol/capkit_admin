@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend, Cell } from 'recharts';
+import React, { useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { generateDailyReport } from '../services/geminiService';
 import { generateSampleLogs } from '../services/mockData';
 import { DailyReport, ProgramStats } from '../types';
-import { reportsCol, getDeepProgramStats } from '../services/firebase';
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/firestore';
+import { db, getDeepProgramStats } from '../services/firebase';
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { FileText, RefreshCw, Database, Microscope, AlertTriangle } from 'lucide-react';
 
 const activityData = [
@@ -25,12 +24,11 @@ const AnalyticsView: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [deepStats, setDeepStats] = useState<ProgramStats | null>(null);
-  const [scanProgress, setScanProgress] = useState(0); // 0 to 100
+  const [scanProgress, setScanProgress] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
 
   const handleGenerateReport = async () => {
     setGenerating(true);
-    // Simulate fetching metrics
     const activeUsers = 1542;
     const interactions = 8902;
     const startupCount = deepStats?.totalStartups || 45;
@@ -40,12 +38,11 @@ const AnalyticsView: React.FC = () => {
         const result = await generateDailyReport(activeUsers, interactions, startupCount, logs, deepStats || undefined);
         setReport(result);
         
-        // Save to DB (Simulated "Daily Save")
         try {
-            await reportsCol.add({
+            await addDoc(collection(db, 'reports'), {
                 ...result,
                 date: new Date().toISOString(),
-                createdAt: firebase.firestore.Timestamp.now()
+                createdAt: Timestamp.now()
             });
             setLastSaved(new Date().toLocaleTimeString());
         } catch (e) {
@@ -64,8 +61,6 @@ const AnalyticsView: React.FC = () => {
       setIsScanning(true);
       setScanProgress(10);
       try {
-          // In a real app with many users, we might stream this progress.
-          // Here we simulate progress steps while waiting for the promise.
           const progressInterval = setInterval(() => {
               setScanProgress(prev => Math.min(prev + 10, 90));
           }, 500);
@@ -112,7 +107,6 @@ const AnalyticsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Deep Scan Results Section - Only visible if stats exist */}
       {deepStats && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 animate-fade-in">
              <div className="flex items-center justify-between mb-6">
@@ -148,7 +142,6 @@ const AnalyticsView: React.FC = () => {
         </div>
       )}
 
-      {/* Standard Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h3 className="text-sm font-semibold text-slate-500 mb-4 uppercase tracking-wider">User Activity (7 Days)</h3>
@@ -181,7 +174,6 @@ const AnalyticsView: React.FC = () => {
         </div>
       </div>
 
-      {/* AI Report Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-gradient-to-r from-slate-900 to-slate-800 px-6 py-4 flex justify-between items-center">
              <div className="flex items-center gap-2 text-white">
@@ -201,7 +193,6 @@ const AnalyticsView: React.FC = () => {
                         </p>
                     </div>
 
-                    {/* Deep Analysis Section - Only if available */}
                     {report.deepAnalysis && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="bg-red-50 p-5 rounded-lg border border-red-100">
@@ -237,7 +228,6 @@ const AnalyticsView: React.FC = () => {
                         <FileText size={32} />
                     </div>
                     <p>No report generated for today yet.</p>
-                    <p className="text-xs mt-2 text-slate-400">Run a "Deep Scan" first for better results.</p>
                 </div>
             )}
         </div>
@@ -246,7 +236,6 @@ const AnalyticsView: React.FC = () => {
   );
 };
 
-// Helper icon component
 const TrendingUpIcon = ({size}: {size: number}) => (
     <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
 );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
-import { usersCol, toggleUserAccess } from '../services/firebase';
+import { db, toggleUserAccess } from '../services/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 import { MOCK_USERS } from '../services/mockData';
 import { Shield, ShieldAlert, Check, X, Search } from 'lucide-react';
 
@@ -12,12 +13,11 @@ const UsersView: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const snapshot = await usersCol.get();
-        if (snapshot.empty) {
-          // Fallback to mock data for demo if DB is empty
+        const querySnapshot = await getDocs(collection(db, 'users'));
+        if (querySnapshot.empty) {
           setUsers(MOCK_USERS);
         } else {
-          setUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile)));
+          setUsers(querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile)));
         }
       } catch (err) {
         console.error("Failed to fetch users, using mock", err);
@@ -30,14 +30,11 @@ const UsersView: React.FC = () => {
   }, []);
 
   const handleToggleAccess = async (id: string, currentStatus: boolean) => {
-    // Optimistic UI update
     setUsers(users.map(u => u.id === id ? { ...u, isActive: !currentStatus } : u));
     try {
-      // In a real app with proper write permissions this works
-      // For demo, we just catch error if permission denied
       await toggleUserAccess(id, currentStatus);
     } catch (e) {
-      console.warn("Could not update backend (likely permission/demo mode)", e);
+      console.warn("Could not update backend", e);
     }
   };
 
@@ -120,9 +117,6 @@ const UsersView: React.FC = () => {
             ))}
           </tbody>
         </table>
-        {filteredUsers.length === 0 && (
-            <div className="p-8 text-center text-slate-500">No users found.</div>
-        )}
       </div>
     </div>
   );
