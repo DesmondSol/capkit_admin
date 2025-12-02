@@ -1,6 +1,8 @@
-import React, { Component, ReactNode } from 'react';
-import ReactDOM from 'react-dom/client';
+import React, { ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
 import App from './App';
+
+console.log("Starting application mount...");
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -16,7 +18,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -26,7 +28,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
   }
 
@@ -47,9 +49,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
-const root = ReactDOM.createRoot(rootElement);
-
 try {
+  const root = createRoot(rootElement);
   root.render(
     <React.StrictMode>
       <ErrorBoundary>
@@ -57,6 +58,7 @@ try {
       </ErrorBoundary>
     </React.StrictMode>
   );
+  console.log("Application mount requested.");
 } catch (e) {
   console.error("Root render failed:", e);
   rootElement.innerHTML = `<div style="color:red; padding:20px;">Failed to mount application: ${e}</div>`;

@@ -1,23 +1,10 @@
 import React, { useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { generateDailyReport } from '../services/geminiService';
 import { generateSampleLogs } from '../services/mockData';
 import { DailyReport, ProgramStats } from '../types';
 import { db, getDeepProgramStats } from '../services/firebase';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { FileText, RefreshCw, Database, Microscope, AlertTriangle } from 'lucide-react';
-
-const activityData = [
-  { name: 'Mon', users: 400, interactions: 240 },
-  { name: 'Tue', users: 300, interactions: 139 },
-  { name: 'Wed', users: 200, interactions: 980 },
-  { name: 'Thu', users: 278, interactions: 390 },
-  { name: 'Fri', users: 189, interactions: 480 },
-  { name: 'Sat', users: 239, interactions: 380 },
-  { name: 'Sun', users: 349, interactions: 430 },
-];
-
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'];
+import { FileText, RefreshCw, Database, Microscope, AlertTriangle, TrendingUp, BarChart2 } from 'lucide-react';
 
 const AnalyticsView: React.FC = () => {
   const [report, setReport] = useState<Partial<DailyReport> | null>(null);
@@ -26,6 +13,17 @@ const AnalyticsView: React.FC = () => {
   const [deepStats, setDeepStats] = useState<ProgramStats | null>(null);
   const [scanProgress, setScanProgress] = useState(0);
   const [isScanning, setIsScanning] = useState(false);
+
+  // Mock data for visual charts
+  const activityData = [
+    { label: 'Mon', val: 40 },
+    { label: 'Tue', val: 30 },
+    { label: 'Wed', val: 75 },
+    { label: 'Thu', val: 50 },
+    { label: 'Fri', val: 60 },
+    { label: 'Sat', val: 45 },
+    { label: 'Sun', val: 80 },
+  ];
 
   const handleGenerateReport = async () => {
     setGenerating(true);
@@ -79,6 +77,25 @@ const AnalyticsView: React.FC = () => {
       }
   };
 
+  const SimpleBarChart = ({ data, colorClass }: { data: any[], colorClass: string }) => (
+      <div className="flex items-end justify-between h-48 w-full gap-2 pt-4">
+          {data.map((d, i) => (
+              <div key={i} className="flex flex-col items-center flex-1 h-full justify-end group">
+                  <div className="relative w-full flex justify-center">
+                    <div 
+                        className={`w-full max-w-[20px] rounded-t-sm transition-all duration-500 ${colorClass} opacity-80 group-hover:opacity-100`}
+                        style={{ height: `${d.val}%` }}
+                    ></div>
+                    <div className="absolute -top-8 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                        {d.val} units
+                    </div>
+                  </div>
+                  <span className="text-xs text-slate-400 mt-2">{d.label}</span>
+              </div>
+          ))}
+      </div>
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -121,56 +138,41 @@ const AnalyticsView: React.FC = () => {
                 </div>
              </div>
 
-             <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={deepStats.moduleStats} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
-                        <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickFormatter={(val) => val.charAt(0).toUpperCase() + val.slice(1)}/>
-                        <YAxis stroke="#64748b" fontSize={12} unit="%" />
-                        <Tooltip 
-                            cursor={{fill: '#f1f5f9'}}
-                            contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                        />
-                        <Bar dataKey="completionRate" name="Completion Rate" radius={[4, 4, 0, 0]}>
-                            {deepStats.moduleStats.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
+             <div className="w-full">
+                <div className="flex items-end space-x-2 h-64 border-b border-slate-200 pb-2">
+                    {deepStats.moduleStats.map((mod, idx) => (
+                        <div key={mod.name} className="flex-1 flex flex-col justify-end items-center group h-full">
+                            <div 
+                                className="w-full max-w-[40px] bg-brand-500 rounded-t-md transition-all duration-700 relative hover:bg-brand-600"
+                                style={{ height: `${mod.completionRate}%` }}
+                            >
+                                <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {mod.completionRate}%
+                                </span>
+                            </div>
+                            <span className="text-xs text-slate-500 mt-2 rotate-0 truncate w-full text-center" title={mod.name}>
+                                {mod.name.length > 8 ? mod.name.substring(0,8)+'..' : mod.name}
+                            </span>
+                        </div>
+                    ))}
+                </div>
              </div>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h3 className="text-sm font-semibold text-slate-500 mb-4 uppercase tracking-wider">User Activity (7 Days)</h3>
-            <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={activityData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
-                        <YAxis stroke="#64748b" fontSize={12} />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="users" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                    </LineChart>
-                </ResponsiveContainer>
-            </div>
+            <h3 className="text-sm font-semibold text-slate-500 mb-4 uppercase tracking-wider flex items-center gap-2">
+                <TrendingUp size={16}/> User Activity (7 Days)
+            </h3>
+            <SimpleBarChart data={activityData} colorClass="bg-blue-500" />
         </div>
 
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <h3 className="text-sm font-semibold text-slate-500 mb-4 uppercase tracking-wider">System Interactions</h3>
-            <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={activityData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
-                        <YAxis stroke="#64748b" fontSize={12} />
-                        <Tooltip />
-                        <Bar dataKey="interactions" fill="#1e293b" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
+            <h3 className="text-sm font-semibold text-slate-500 mb-4 uppercase tracking-wider flex items-center gap-2">
+                <BarChart2 size={16}/> System Interactions
+            </h3>
+            <SimpleBarChart data={activityData.map(d => ({...d, val: Math.min(100, d.val * 1.5)}))} colorClass="bg-slate-700" />
         </div>
       </div>
 
@@ -203,7 +205,7 @@ const AnalyticsView: React.FC = () => {
                             </div>
                             <div className="bg-blue-50 p-5 rounded-lg border border-blue-100">
                                 <h5 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
-                                    <TrendingUpIcon size={16}/> Trend Analysis
+                                    <TrendingUp size={16}/> Trend Analysis
                                 </h5>
                                 <p className="text-sm text-blue-700">{report.deepAnalysis.trendAnalysis}</p>
                             </div>
@@ -235,9 +237,5 @@ const AnalyticsView: React.FC = () => {
     </div>
   );
 };
-
-const TrendingUpIcon = ({size}: {size: number}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
-);
 
 export default AnalyticsView;

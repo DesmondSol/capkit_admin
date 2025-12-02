@@ -35,14 +35,19 @@
       window.addEventListener('error', function(e) {
         console.error('Global Error caught:', e.message);
         const root = document.getElementById('root');
-        if (root && root.innerHTML === '') {
-           // Only show if nothing rendered
+        if (root) {
            const errDiv = document.createElement('div');
            errDiv.style.padding = '20px';
            errDiv.style.color = 'red';
-           errDiv.innerText = 'System Error: ' + e.message;
-           document.body.appendChild(errDiv);
+           errDiv.style.background = '#fff0f0';
+           errDiv.innerHTML = '<strong>System Error:</strong> ' + e.message;
+           document.body.prepend(errDiv);
         }
+      });
+
+      // Catch async promise rejections (often network or auth errors)
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error('Unhandled Rejection:', e.reason);
       });
     </script>
     <style>
@@ -74,7 +79,6 @@
     "firebase/analytics": "https://aistudiocdn.com/firebase@^12.6.0/analytics",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
     "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react/": "https://aistudiocdn.com/react@^19.2.0/"

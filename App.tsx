@@ -11,14 +11,24 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState('startups');
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [timeoutError, setTimeoutError] = useState(false);
 
   useEffect(() => {
+    // Safety timeout in case Firebase fails to connect silently
+    const timer = setTimeout(() => {
+      if (loading) setTimeoutError(true);
+    }, 8000);
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
+      clearTimeout(timer);
     });
 
-    return () => unsubscribe();
+    return () => {
+        unsubscribe();
+        clearTimeout(timer);
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -56,6 +66,28 @@ const App: React.FC = () => {
         return <StartupsView />;
     }
   };
+
+  if (timeoutError && loading) {
+     return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-white p-6 rounded-lg shadow-lg border-l-4 border-red-500">
+                <h3 className="text-red-600 font-bold text-lg mb-2">Connection Timeout</h3>
+                <p className="text-slate-600">The application is taking too long to connect to Firebase. This might be due to:</p>
+                <ul className="list-disc ml-5 mt-2 text-sm text-slate-500 space-y-1">
+                    <li>Network restrictions or AdBlockers blocking Firebase.</li>
+                    <li>Slow internet connection.</li>
+                    <li>Invalid Firebase configuration.</li>
+                </ul>
+                <button 
+                    onClick={() => window.location.reload()}
+                    className="mt-4 bg-slate-900 text-white px-4 py-2 rounded hover:bg-slate-800 transition-colors w-full"
+                >
+                    Reload Page
+                </button>
+            </div>
+        </div>
+     )
+  }
 
   if (loading) {
     return (
