@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, auth } from '../services/firebase';
+// Fix: Use v8 namespaced API
+import { auth } from '../services/firebase';
 import { Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
 
 const LoginView: React.FC = () => {
@@ -14,7 +15,8 @@ const LoginView: React.FC = () => {
     setError('');
     
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // Fix: Use v8 namespaced API for sign in
+      await auth.signInWithEmailAndPassword(email, password);
     } catch (err: any) {
       console.error(err);
       setError('Invalid email or password. Please try again.');

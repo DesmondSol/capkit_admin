@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { auth, onAuthStateChanged, signOut, User } from './services/firebase';
+// Fix: Use v8 namespaced API
+import { auth, User } from './services/firebase';
 import Sidebar from './components/Sidebar';
 import UsersView from './views/UsersView';
 import StartupsView from './views/StartupsView';
@@ -13,7 +14,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    // Fix: Use v8 namespaced API for auth state changes
+    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
       setUser(currentUser);
       setLoading(false);
     });
@@ -23,7 +25,8 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      // Fix: Use v8 namespaced API for sign out
+      await auth.signOut();
     } catch (error) {
       console.error("Error signing out", error);
     }

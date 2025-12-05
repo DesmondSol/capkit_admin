@@ -1,23 +1,47 @@
 import React, { useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { generateDailyReport } from '../services/geminiService';
 import { generateSampleLogs } from '../services/mockData';
 import { DailyReport, ProgramStats } from '../types';
-import { db, getDeepProgramStats } from '../services/firebase';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { FileText, RefreshCw, Database, Microscope, AlertTriangle } from 'lucide-react';
+// Fix: Use v8 namespaced API
+import { db, getDeepProgramStats, Timestamp } from '../services/firebase';
+import { FileText, RefreshCw, Database, Microscope, AlertTriangle, TrendingUp } from 'lucide-react';
 
 const activityData = [
-  { name: 'Mon', users: 400, interactions: 240 },
-  { name: 'Tue', users: 300, interactions: 139 },
-  { name: 'Wed', users: 200, interactions: 980 },
-  { name: 'Thu', users: 278, interactions: 390 },
-  { name: 'Fri', users: 189, interactions: 480 },
-  { name: 'Sat', users: 239, interactions: 380 },
-  { name: 'Sun', users: 349, interactions: 430 },
+  { name: 'Mon', users: 40, interactions: 24 },
+  { name: 'Tue', users: 30, interactions: 14 },
+  { name: 'Wed', users: 20, interactions: 98 },
+  { name: 'Thu', users: 27, interactions: 39 },
+  { name: 'Fri', users: 18, interactions: 48 },
+  { name: 'Sat', users: 23, interactions: 38 },
+  { name: 'Sun', users: 34, interactions: 43 },
 ];
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'];
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#06b6d4'];
+
+// Simple Bar Chart Component
+const SimpleBarChart = ({ data, dataKey, name, unit, colors }: { data: any[], dataKey: string, name: string, unit?: string, colors: string[] }) => (
+    <div className="w-full h-full flex flex-col">
+        <div className="flex-grow flex items-end gap-2 px-4 border-l border-b border-slate-200">
+            {data.map((entry, index) => (
+                <div key={`bar-${index}`} className="flex-1 flex flex-col items-center gap-1 group">
+                    <div className="text-xs text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white px-2 py-1 rounded-md mb-1 whitespace-nowrap">
+                       {entry[dataKey]}{unit}
+                    </div>
+                    <div 
+                        className="w-full rounded-t-md" 
+                        style={{ 
+                            height: `${(entry[dataKey] / Math.max(...data.map(d => d[dataKey]))) * 100}%`,
+                            backgroundColor: colors[index % colors.length],
+                            transition: 'height 0.3s ease-out'
+                        }}
+                    ></div>
+                    <span className="text-xs text-slate-500 capitalize">{entry.name}</span>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
 
 const AnalyticsView: React.FC = () => {
   const [report, setReport] = useState<Partial<DailyReport> | null>(null);
@@ -39,7 +63,8 @@ const AnalyticsView: React.FC = () => {
         setReport(result);
         
         try {
-            await addDoc(collection(db, 'reports'), {
+            // Fix: Use v8 namespaced API for adding documents
+            await db.collection('reports').add({
                 ...result,
                 date: new Date().toISOString(),
                 createdAt: Timestamp.now()
@@ -122,22 +147,13 @@ const AnalyticsView: React.FC = () => {
              </div>
 
              <div className="h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={deepStats.moduleStats} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
-                        <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickFormatter={(val) => val.charAt(0).toUpperCase() + val.slice(1)}/>
-                        <YAxis stroke="#64748b" fontSize={12} unit="%" />
-                        <Tooltip 
-                            cursor={{fill: '#f1f5f9'}}
-                            contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                        />
-                        <Bar dataKey="completionRate" name="Completion Rate" radius={[4, 4, 0, 0]}>
-                            {deepStats.moduleStats.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
+                <SimpleBarChart 
+                    data={deepStats.moduleStats}
+                    dataKey="completionRate"
+                    name="Completion Rate"
+                    unit="%"
+                    colors={COLORS}
+                />
              </div>
         </div>
       )}
@@ -146,30 +162,14 @@ const AnalyticsView: React.FC = () => {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h3 className="text-sm font-semibold text-slate-500 mb-4 uppercase tracking-wider">User Activity (7 Days)</h3>
             <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={activityData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
-                        <YAxis stroke="#64748b" fontSize={12} />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="users" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                    </LineChart>
-                </ResponsiveContainer>
+                <SimpleBarChart data={activityData} dataKey="users" name="Active Users" colors={['#3b82f6']} />
             </div>
         </div>
 
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <h3 className="text-sm font-semibold text-slate-500 mb-4 uppercase tracking-wider">System Interactions</h3>
             <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={activityData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                        <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
-                        <YAxis stroke="#64748b" fontSize={12} />
-                        <Tooltip />
-                        <Bar dataKey="interactions" fill="#1e293b" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                </ResponsiveContainer>
+                <SimpleBarChart data={activityData} dataKey="interactions" name="Interactions" colors={['#1e293b']} />
             </div>
         </div>
       </div>
@@ -203,7 +203,7 @@ const AnalyticsView: React.FC = () => {
                             </div>
                             <div className="bg-blue-50 p-5 rounded-lg border border-blue-100">
                                 <h5 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
-                                    <TrendingUpIcon size={16}/> Trend Analysis
+                                    <TrendingUp size={16}/> Trend Analysis
                                 </h5>
                                 <p className="text-sm text-blue-700">{report.deepAnalysis.trendAnalysis}</p>
                             </div>
@@ -235,9 +235,5 @@ const AnalyticsView: React.FC = () => {
     </div>
   );
 };
-
-const TrendingUpIcon = ({size}: {size: number}) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
-);
 
 export default AnalyticsView;

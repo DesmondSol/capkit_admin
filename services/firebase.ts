@@ -1,6 +1,6 @@
-import { initializeApp } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from "firebase/auth";
-import { getFirestore, collection, doc, getDoc, getDocs, updateDoc, setDoc, addDoc, query, where, Timestamp } from "firebase/firestore";
+import firebase from "firebase/app";
+import "firebase/auth";
+import "firebase/firestore";
 // import { getAnalytics, isSupported } from "firebase/analytics"; // Removed to prevent ad-blocker crashes
 import { StartupData, UserProfile, CanvasData, Investor, ProgramStats, TeamData, MindsetData } from "../types";
 
@@ -16,18 +16,21 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Fix: Use v8 namespaced API for initialization
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 console.log("Firebase Initialized"); // Debug log
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const auth = firebase.auth();
+export const db = firebase.firestore();
 
 // Safe Analytics Initialization - Optional
 export const analytics: any = null;
 
-// Export Auth functions
-export { signInWithEmailAndPassword, signOut, onAuthStateChanged };
-export type { User };
+// Fix: Export types and objects compatible with v8 API
+export type User = firebase.User;
+export const Timestamp = firebase.firestore.Timestamp;
 
 // --- Data Helper Functions ---
 
@@ -69,35 +72,35 @@ const extractVentureName = (canvas?: CanvasData, userDisplayName?: string): stri
 // Aggregates User Profile + Workspace Canvas + Admin Metadata
 export const getAggregatedStartups = async (): Promise<StartupData[]> => {
   try {
-    const usersRef = collection(db, 'users');
-    const usersSnapshot = await getDocs(usersRef);
+    const usersRef = db.collection('users');
+    const usersSnapshot = await usersRef.get();
     const users = usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile));
     
     const startupsPromises = users.map(async (user) => {
       // 1. Setup Refs
-      const workspaceModulesRef = collection(db, 'workspaces', user.id, 'modules');
+      const workspaceModulesRef = db.collection('workspaces').doc(user.id).collection('modules');
       
       // 2. Fetch Canvas Data
       let canvasData: CanvasData | undefined = undefined;
-      const canvasDocRef = doc(workspaceModulesRef, 'canvas');
-      const canvasSnap = await getDoc(canvasDocRef);
-      if (canvasSnap.exists()) {
+      const canvasDocRef = workspaceModulesRef.doc('canvas');
+      const canvasSnap = await canvasDocRef.get();
+      if (canvasSnap.exists) {
         canvasData = canvasSnap.data() as CanvasData;
       }
 
       // 3. Fetch Team Data
       let teamData: TeamData | undefined = undefined;
-      const teamDocRef = doc(workspaceModulesRef, 'team');
-      const teamSnap = await getDoc(teamDocRef);
-      if (teamSnap.exists()) {
+      const teamDocRef = workspaceModulesRef.doc('team');
+      const teamSnap = await teamDocRef.get();
+      if (teamSnap.exists) {
           teamData = teamSnap.data() as TeamData;
       }
 
       // 4. Fetch Mindset Data
       let mindsetData: MindsetData | undefined = undefined;
-      const mindsetDocRef = doc(workspaceModulesRef, 'mindset');
-      const mindsetSnap = await getDoc(mindsetDocRef);
-      if (mindsetSnap.exists()) {
+      const mindsetDocRef = workspaceModulesRef.doc('mindset');
+      const mindsetSnap = await mindsetDocRef.get();
+      if (mindsetSnap.exists) {
           mindsetData = mindsetSnap.data() as MindsetData;
       }
 
@@ -108,9 +111,9 @@ export const getAggregatedStartups = async (): Promise<StartupData[]> => {
 
       // 5. Check existence of other modules for progress tracking
       const moduleCheckPromise = ['economics', 'productDesign', 'sales', 'grow'].map(async (mod) => {
-          const modDocRef = doc(workspaceModulesRef, mod);
-          const s = await getDoc(modDocRef);
-          return { name: mod, exists: s.exists() };
+          const modDocRef = workspaceModulesRef.doc(mod);
+          const s = await modDocRef.get();
+          return { name: mod, exists: s.exists };
       });
       const moduleResults = await Promise.all(moduleCheckPromise);
       const moduleProgress: {[key:string]: boolean} = {};
@@ -120,36 +123,20 @@ export const getAggregatedStartups = async (): Promise<StartupData[]> => {
       if (mindsetData) moduleProgress['mindset'] = true;
 
       // 6. Fetch Admin Metadata (Scores, Favorites, AI Evals)
-      const metaRef = doc(db, 'startups', user.id);
-      const metaSnap = await getDoc(metaRef);
-      const metaData = metaSnap.exists() ? (metaSnap.data() || {}) : {};
+      const metaRef = db.collection('startups').doc(user.id);
+      const metaSnap = await metaRef.get();
+      const metaData = metaSnap.exists ? (metaSnap.data() || {}) : {};
 
       // 7. Smart Name Extraction
       const ventureName = extractVentureName(canvasData, user.displayName);
 
-      // 8. Determine Bio safely (Avoid Object Injection)
-      let bio = 'Profile not yet enriched.';
-      if (mindsetData?.profileReport) {
-          if (typeof mindsetData.profileReport === 'string') {
-              bio = mindsetData.profileReport;
-          } else if (typeof mindsetData.profileReport === 'object' && (mindsetData.profileReport as any).founderTypeDescription) {
-              // Extract string from object
-              bio = (mindsetData.profileReport as any).founderTypeDescription;
-          } else {
-             bio = "See Mindset Report for details.";
-          }
-      } else if (teamData?.["Founder Story"]) {
-          bio = teamData["Founder Story"];
-      } else if (metaData.founderBio) {
-          bio = metaData.founderBio;
-      }
-
-      // 9. Map to StartupData
+      // 8. Map to StartupData
       return {
         id: user.id,
         name: ventureName,
         founderName: user.displayName || 'Unknown Founder',
-        founderBio: bio,
+        // Prioritize mindset profile report for bio if available
+        founderBio: mindsetData?.profileReport || teamData?.["Founder Story"] || metaData.founderBio || 'Profile not yet enriched.',
         
         shortDescription: canvasData?.["Unique Value Proposition"] || canvasData?.["Project Overview"] || 'No Value Proposition defined yet.',
         
@@ -204,18 +191,18 @@ const calculateReadiness = (canvas?: CanvasData, team?: TeamData, mindset?: Mind
 };
 
 export const toggleUserAccess = async (userId: string, currentStatus: boolean) => {
-  const userRef = doc(db, 'users', userId);
-  await updateDoc(userRef, { isActive: !currentStatus });
+  const userRef = db.collection('users').doc(userId);
+  await userRef.update({ isActive: !currentStatus });
 };
 
 export const updateStartupAiData = async (startupId: string, aiData: any) => {
-  const startupRef = doc(db, 'startups', startupId);
-  await setDoc(startupRef, { aiEvaluation: aiData }, { merge: true });
+  const startupRef = db.collection('startups').doc(startupId);
+  await startupRef.set({ aiEvaluation: aiData }, { merge: true });
 };
 
 export const toggleStartupFavorite = async (startupId: string, currentStatus: boolean) => {
-  const startupRef = doc(db, 'startups', startupId);
-  await setDoc(startupRef, { isFavorite: !currentStatus }, { merge: true });
+  const startupRef = db.collection('startups').doc(startupId);
+  await startupRef.set({ isFavorite: !currentStatus }, { merge: true });
 };
 
 // --- DEEP SCAN ---
@@ -235,8 +222,8 @@ const TARGET_MODULES = [
 
 export const getDeepProgramStats = async (): Promise<ProgramStats> => {
     try {
-        const usersRef = collection(db, 'users');
-        const usersSnap = await getDocs(usersRef);
+        const usersRef = db.collection('users');
+        const usersSnap = await usersRef.get();
         const totalUsers = usersSnap.size;
         
         const moduleCounts: Record<string, number> = {};
@@ -248,9 +235,9 @@ export const getDeepProgramStats = async (): Promise<ProgramStats> => {
             const userId = userDoc.id;
             
             for (const mod of TARGET_MODULES) {
-                const docRef = doc(db, 'workspaces', userId, 'modules', mod);
-                const docSnap = await getDoc(docRef);
-                if (docSnap.exists()) {
+                const docRef = db.collection('workspaces').doc(userId).collection('modules').doc(mod);
+                const docSnap = await docRef.get();
+                if (docSnap.exists) {
                     moduleCounts[mod]++;
                     
                     if (samples.length < 5 && Math.random() > 0.8) {
@@ -297,8 +284,8 @@ export const getDeepProgramStats = async (): Promise<ProgramStats> => {
 
 export const getInvestors = async (): Promise<Investor[]> => {
     try {
-        const invRef = collection(db, 'investor_registrations');
-        const snapshot = await getDocs(invRef);
+        const invRef = db.collection('investor_registrations');
+        const snapshot = await invRef.get();
         return snapshot.docs.map(d => {
             const data = d.data();
             return { 
@@ -316,6 +303,6 @@ export const getInvestors = async (): Promise<Investor[]> => {
 };
 
 export const updateInvestorStatus = async (id: string, status: 'approved' | 'rejected') => {
-    const ref = doc(db, 'investor_registrations', id);
-    await updateDoc(ref, { status });
+    const ref = db.collection('investor_registrations').doc(id);
+    await ref.update({ status });
 };

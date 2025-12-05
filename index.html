@@ -30,46 +30,53 @@
         window.process.env = window.process.env || {};
         window.process.env.API_KEY = ''; // Handled by SDK usage
       }
-      
-      // Prevent white screen by catching unhandled promise rejections (often network/module errors)
-      window.addEventListener('unhandledrejection', function(event) {
-        console.warn('Unhandled rejection:', event.reason);
+
+      // Global error handler to catch script loading errors
+      window.addEventListener('error', function(e) {
+        console.error('Global Error caught:', e.message);
+        const root = document.getElementById('root');
+        if (root && root.innerHTML === '') {
+           // Only show if nothing rendered
+           const errDiv = document.createElement('div');
+           errDiv.style.padding = '20px';
+           errDiv.style.color = 'red';
+           errDiv.innerText = 'System Error: ' + e.message;
+           document.body.appendChild(errDiv);
+        }
       });
     </script>
     <style>
-      ::-webkit-scrollbar { width: 8px; height: 8px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      /* Custom scrollbar for webkit */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8; 
+      }
     </style>
-    <!-- CRITICAL FIX: Use stable esm.sh imports to prevent version mismatch and loading errors -->
-<script type="importmap">
+  <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
-    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
-    "react-dom": "https://esm.sh/react-dom@18.2.0",
     "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-
-    "firebase/app": "https://esm.sh/firebase@10.8.0/app",
-    "firebase/auth": "https://esm.sh/firebase@10.8.0/auth",
-    "firebase/firestore": "https://esm.sh/firebase@10.8.0/firestore",
-    "firebase/analytics": "https://esm.sh/firebase@10.8.0/analytics",
-
-    "@google/genai": "https://esm.sh/@google/genai@0.1.0",
-
-    "lucide-react": "https://esm.sh/lucide-react@0.292.0?deps=react@18.2.0",
-    "recharts": "https://esm.sh/recharts@2.12.0?deps=react@18.2.0,react-dom@18.2.0"
+    "firebase/app": "https://esm.sh/firebase@10.8.0/compat/app",
+    "firebase/auth": "https://esm.sh/firebase@10.8.0/compat/auth",
+    "firebase/firestore": "https://esm.sh/firebase@10.8.0/compat/firestore",
+    "@google/genai": "https://esm.sh/@google/genai@0.11.3",
+    "lucide-react": "https://esm.sh/lucide-react@0.378.0?deps=react@18.2.0"
   }
 }
 </script>
 </head>
   <body class="bg-gray-50 text-slate-900 antialiased overflow-hidden">
-    <div id="root">
-        <!-- Visual fallback while JS loads -->
-        <div style="height: 100vh; display: flex; justify-content: center; align-items: center; color: #64748b; font-family: sans-serif;">
-            Loading Dashboard...
-        </div>
-    </div>
+    <div id="root"></div>
   </body>
 </html>

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { db, toggleUserAccess } from '../services/firebase';
-import { collection, getDocs } from 'firebase/firestore';
 import { MOCK_USERS } from '../services/mockData';
 import { Shield, ShieldAlert, Check, X, Search } from 'lucide-react';
 
@@ -13,7 +12,8 @@ const UsersView: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'users'));
+        // Fix: Use v8 namespaced API for fetching data
+        const querySnapshot = await db.collection('users').get();
         if (querySnapshot.empty) {
           setUsers(MOCK_USERS);
         } else {
