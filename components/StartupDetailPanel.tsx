@@ -51,37 +51,56 @@ const StartupDetailPanel: React.FC<StartupDetailPanelProps> = ({ startup, onClos
   );
 
   const renderProfileReport = (report: any) => {
-      if (!report) return null;
-      if (typeof report === 'string') return report;
+      if (!report) return <span className="text-slate-400 italic">No profile report available.</span>;
+      if (typeof report === 'string') return <p>{report}</p>;
       
       // If it's the structured object
-      return (
-          <div className="space-y-3">
-              {report.founderTypeTitle && (
-                  <div className="font-bold text-purple-900 text-base">{report.founderTypeTitle}</div>
-              )}
-              {report.founderTypeDescription && (
-                  <p className="italic text-slate-600">{report.founderTypeDescription}</p>
-              )}
-              {report.keyTakeaways && Array.isArray(report.keyTakeaways) && (
-                  <div>
-                      <span className="font-bold text-xs uppercase text-purple-700 block mb-1">Key Strengths:</span>
-                      <ul className="list-disc pl-4 space-y-1">
-                          {report.keyTakeaways.slice(0, 3).map((t: string, i: number) => (
-                              <li key={i} className="text-xs text-slate-700">{t}</li>
-                          ))}
-                      </ul>
-                  </div>
-              )}
-              {report.cofounderPersonaSuggestion && (
-                   <div className="mt-2 pt-2 border-t border-purple-200">
-                      <span className="font-bold text-xs uppercase text-purple-700 block mb-1">Recommended Co-Founder:</span>
-                      <p className="text-xs text-slate-700">{report.cofounderPersonaSuggestion}</p>
-                   </div>
-              )}
-          </div>
-      );
+      try {
+          return (
+              <div className="space-y-3">
+                  {report.founderTypeTitle && (
+                      <div className="font-bold text-purple-900 text-base">{report.founderTypeTitle}</div>
+                  )}
+                  {report.founderTypeDescription && (
+                      <p className="italic text-slate-600">{report.founderTypeDescription}</p>
+                  )}
+                  {report.keyTakeaways && Array.isArray(report.keyTakeaways) && (
+                      <div>
+                          <span className="font-bold text-xs uppercase text-purple-700 block mb-1">Key Strengths:</span>
+                          <ul className="list-disc pl-4 space-y-1">
+                              {report.keyTakeaways.slice(0, 3).map((t: string, i: number) => (
+                                  <li key={i} className="text-xs text-slate-700">{t}</li>
+                              ))}
+                          </ul>
+                      </div>
+                  )}
+                  {report.cofounderPersonaSuggestion && (
+                       <div className="mt-2 pt-2 border-t border-purple-200">
+                          <span className="font-bold text-xs uppercase text-purple-700 block mb-1">Recommended Co-Founder:</span>
+                          <p className="text-xs text-slate-700">{report.cofounderPersonaSuggestion}</p>
+                       </div>
+                  )}
+              </div>
+          );
+      } catch (e) {
+          return <p className="text-xs text-slate-500">Complex profile data available.</p>;
+      }
   };
+
+  const renderGoals = (goals: any) => {
+      if (!goals) return null;
+      if (typeof goals === 'string') return goals;
+      if (Array.isArray(goals)) {
+          return (
+              <ul className="list-disc pl-4 space-y-1">
+                  {goals.map((g: any, i: number) => (
+                      <li key={i}>{typeof g === 'string' ? g : JSON.stringify(g)}</li>
+                  ))}
+              </ul>
+          );
+      }
+      return JSON.stringify(goals, null, 2);
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
@@ -211,10 +230,7 @@ const StartupDetailPanel: React.FC<StartupDetailPanelProps> = ({ startup, onClos
                                             <Target size={12}/> Primary Goals
                                         </h5>
                                         <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm text-slate-700 whitespace-pre-line">
-                                             {typeof startup.mindset.goals === 'string' 
-                                                ? startup.mindset.goals 
-                                                : JSON.stringify(startup.mindset.goals, null, 2)
-                                             }
+                                             {renderGoals(startup.mindset.goals)}
                                         </div>
                                     </div>
                                 )}
