@@ -3,21 +3,20 @@ import { Investor } from '../types';
 import { getInvestors, updateInvestorStatus } from '../services/firebase';
 import { MOCK_INVESTORS } from '../services/mockData';
 import { Search, Building2, Globe, Linkedin, CheckCircle, XCircle, Clock, ExternalLink } from 'lucide-react';
+import InvestorDetailPanel from '../components/InvestorDetailPanel';
 
 const InvestorsView: React.FC = () => {
   const [investors, setInvestors] = useState<Investor[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedInvestor, setSelectedInvestor] = useState<Investor | null>(null);
 
   useEffect(() => {
     const fetchInvestors = async () => {
       try {
         const data = await getInvestors();
         if (data.length === 0) {
-            // Check console to see if real data was fetched but empty
             console.log("No investors found in DB, using mock if available.");
-             // Fallback to mock data if DB is empty for demo purposes
-             // Remove MOCK_INVESTORS in production
              setInvestors(MOCK_INVESTORS);
         } else {
             setInvestors(data);
@@ -34,7 +33,13 @@ const InvestorsView: React.FC = () => {
 
   const handleStatusUpdate = async (id: string, newStatus: 'approved' | 'rejected') => {
     // Optimistic UI update
-    setInvestors(investors.map(inv => inv.id === id ? { ...inv, status: newStatus } : inv));
+    setInvestors(prev => prev.map(inv => inv.id === id ? { ...inv, status: newStatus } : inv));
+    
+    // Also update selected investor if it's the one being modified
+    if (selectedInvestor && selectedInvestor.id === id) {
+        setSelectedInvestor(prev => prev ? { ...prev, status: newStatus } : null);
+    }
+
     try {
         await updateInvestorStatus(id, newStatus);
     } catch (e) {
@@ -95,7 +100,11 @@ const InvestorsView: React.FC = () => {
             </thead>
             <tbody className="bg-white divide-y divide-slate-200">
                 {filteredInvestors.map((inv) => (
-                <tr key={inv.id} className="hover:bg-slate-50 transition-colors">
+                <tr 
+                    key={inv.id} 
+                    className="hover:bg-slate-50 transition-colors cursor-pointer"
+                    onClick={() => setSelectedInvestor(inv)}
+                >
                     <td className="px-6 py-4">
                     <div className="flex items-center">
                         <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold flex-shrink-0">
@@ -106,10 +115,10 @@ const InvestorsView: React.FC = () => {
                         <div className="text-sm text-slate-500">{inv.email}</div>
                         <div className="flex gap-2 mt-1">
                             {inv.linkedinProfile && (
-                                <a href={inv.linkedinProfile} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-[#0077b5]"><Linkedin size={14}/></a>
+                                <span className="text-slate-400"><Linkedin size={14}/></span>
                             )}
                             {inv.website && (
-                                <a href={inv.website} target="_blank" rel="noreferrer" className="text-slate-400 hover:text-brand-500"><Globe size={14}/></a>
+                                <span className="text-slate-400"><Globe size={14}/></span>
                             )}
                         </div>
                         </div>
@@ -134,24 +143,7 @@ const InvestorsView: React.FC = () => {
                         {getStatusBadge(inv.status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        {inv.status !== 'approved' && (
-                            <button
-                                onClick={() => handleStatusUpdate(inv.id, 'approved')}
-                                className="text-green-600 hover:text-green-900 mr-3"
-                                title="Approve"
-                            >
-                                Approve
-                            </button>
-                        )}
-                        {inv.status !== 'rejected' && (
-                            <button
-                                onClick={() => handleStatusUpdate(inv.id, 'rejected')}
-                                className="text-red-600 hover:text-red-900"
-                                title="Reject"
-                            >
-                                Reject
-                            </button>
-                        )}
+                         <button className="text-brand-600 hover:text-brand-800">View Details</button>
                     </td>
                 </tr>
                 ))}
@@ -166,6 +158,12 @@ const InvestorsView: React.FC = () => {
         </div>
         )}
       </div>
+
+      <InvestorDetailPanel 
+        investor={selectedInvestor}
+        onClose={() => setSelectedInvestor(null)}
+        onStatusUpdate={handleStatusUpdate}
+      />
     </div>
   );
 };

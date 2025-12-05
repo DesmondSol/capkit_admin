@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Star, Zap, CheckCircle, AlertTriangle, FileText, ArrowRight, LayoutGrid } from 'lucide-react';
+import { X, Star, Zap, CheckCircle, AlertTriangle, FileText, ArrowRight, LayoutGrid, Users, Target, BrainCircuit } from 'lucide-react';
 import { StartupData, StartupAiEvaluation } from '../types';
 import { evaluateStartup } from '../services/geminiService';
 import { updateStartupAiData } from '../services/firebase';
@@ -18,9 +18,6 @@ const StartupDetailPanel: React.FC<StartupDetailPanelProps> = ({ startup, onClos
   useEffect(() => {
     if (startup) {
       setEvaluation(startup.aiEvaluation);
-      // Auto-run analysis if missing? 
-      // Better to let user click to save costs/time, or trigger if empty.
-      // We will leave it manual or triggered by user for now.
     }
   }, [startup]);
 
@@ -52,6 +49,39 @@ const StartupDetailPanel: React.FC<StartupDetailPanelProps> = ({ startup, onClos
           <p className="text-sm text-slate-700 whitespace-pre-wrap">{content || 'Not specified'}</p>
       </div>
   );
+
+  const renderProfileReport = (report: any) => {
+      if (!report) return null;
+      if (typeof report === 'string') return report;
+      
+      // If it's the structured object
+      return (
+          <div className="space-y-3">
+              {report.founderTypeTitle && (
+                  <div className="font-bold text-purple-900 text-base">{report.founderTypeTitle}</div>
+              )}
+              {report.founderTypeDescription && (
+                  <p className="italic text-slate-600">{report.founderTypeDescription}</p>
+              )}
+              {report.keyTakeaways && Array.isArray(report.keyTakeaways) && (
+                  <div>
+                      <span className="font-bold text-xs uppercase text-purple-700 block mb-1">Key Strengths:</span>
+                      <ul className="list-disc pl-4 space-y-1">
+                          {report.keyTakeaways.slice(0, 3).map((t: string, i: number) => (
+                              <li key={i} className="text-xs text-slate-700">{t}</li>
+                          ))}
+                      </ul>
+                  </div>
+              )}
+              {report.cofounderPersonaSuggestion && (
+                   <div className="mt-2 pt-2 border-t border-purple-200">
+                      <span className="font-bold text-xs uppercase text-purple-700 block mb-1">Recommended Co-Founder:</span>
+                      <p className="text-xs text-slate-700">{report.cofounderPersonaSuggestion}</p>
+                   </div>
+              )}
+          </div>
+      );
+  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
@@ -122,17 +152,74 @@ const StartupDetailPanel: React.FC<StartupDetailPanelProps> = ({ startup, onClos
                 {activeTab === 'overview' && (
                     <div className="space-y-6">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                            <h3 className="text-lg font-semibold text-slate-900 mb-4">Founder Profile</h3>
-                            <div className="flex items-start gap-4">
-                                <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-xl">
+                            <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                                <Users size={20} className="text-brand-500"/> Team & Leadership
+                            </h3>
+                            <div className="flex items-start gap-4 mb-4">
+                                <div className="w-12 h-12 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold text-xl flex-shrink-0">
                                     {startup.founderName.charAt(0)}
                                 </div>
                                 <div>
                                     <h4 className="font-medium text-slate-900">{startup.founderName}</h4>
-                                    <p className="text-sm text-slate-500 mt-1">{startup.founderBio}</p>
+                                    <p className="text-xs text-brand-600 font-semibold uppercase tracking-wide">Founder</p>
+                                    <p className="text-sm text-slate-600 mt-2 bg-slate-50 p-3 rounded-lg">{startup.founderBio}</p>
                                 </div>
                             </div>
+                            
+                            {startup.team && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-100">
+                                    {startup.team["Team Members"] && (
+                                        <div className="bg-slate-50 p-3 rounded">
+                                            <span className="text-xs text-slate-400 uppercase font-bold">Team Members</span>
+                                            <p className="text-sm text-slate-700 mt-1">{startup.team["Team Members"]}</p>
+                                        </div>
+                                    )}
+                                    {startup.team["Key Roles"] && (
+                                        <div className="bg-slate-50 p-3 rounded">
+                                            <span className="text-xs text-slate-400 uppercase font-bold">Key Roles</span>
+                                            <p className="text-sm text-slate-700 mt-1">{startup.team["Key Roles"]}</p>
+                                        </div>
+                                    )}
+                                    {startup.team["Advisors"] && (
+                                        <div className="bg-slate-50 p-3 rounded">
+                                            <span className="text-xs text-slate-400 uppercase font-bold">Advisors</span>
+                                            <p className="text-sm text-slate-700 mt-1">{startup.team["Advisors"]}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
+                        
+                        {(startup.mindset?.goals || startup.mindset?.profileReport) && (
+                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                                    <BrainCircuit size={20} className="text-purple-500"/> Mindset & Vision
+                                </h3>
+                                
+                                {startup.mindset.profileReport && (
+                                    <div className="mb-4">
+                                        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Psychological Profile</h5>
+                                        <div className="bg-purple-50 p-4 rounded-lg border border-purple-100 text-sm text-slate-700">
+                                            {renderProfileReport(startup.mindset.profileReport)}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {startup.mindset.goals && (
+                                    <div>
+                                        <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                            <Target size={12}/> Primary Goals
+                                        </h5>
+                                        <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm text-slate-700 whitespace-pre-line">
+                                             {typeof startup.mindset.goals === 'string' 
+                                                ? startup.mindset.goals 
+                                                : JSON.stringify(startup.mindset.goals, null, 2)
+                                             }
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                             <h3 className="text-lg font-semibold text-slate-900 mb-4">Executive Summary</h3>

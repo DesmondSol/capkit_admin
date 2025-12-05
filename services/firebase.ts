@@ -1,9 +1,10 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from "firebase/auth";
 import { getFirestore, collection, doc, getDoc, getDocs, updateDoc, setDoc, addDoc, query, where, Timestamp } from "firebase/firestore";
-import { getAnalytics, isSupported } from "firebase/analytics";
-import { StartupData, UserProfile, CanvasData, Investor, ProgramStats } from "../types";
+// import { getAnalytics, isSupported } from "firebase/analytics"; // Removed to prevent ad-blocker crashes
+import { StartupData, UserProfile, CanvasData, Investor, ProgramStats, TeamData, MindsetData } from "../types";
 
+// Explicitly use stable version URL in import map for index.html to avoid "failed to load" errors
 const firebaseConfig = {
   apiKey: "AIzaSyA4GqjifWsIk6jxyQkdh_BK_0YoUExvZIM",
   authDomain: "capkit-et.firebaseapp.com",
@@ -16,22 +17,54 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+console.log("Firebase Initialized"); // Debug log
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// Safe Analytics Initialization
-export let analytics: any = null;
-isSupported().then((supported) => {
-  if (supported) {
-    analytics = getAnalytics(app);
-  }
-}).catch((e) => console.warn("Analytics not supported in this environment", e));
+// Safe Analytics Initialization - Optional
+export const analytics: any = null;
 
 // Export Auth functions
 export { signInWithEmailAndPassword, signOut, onAuthStateChanged };
 export type { User };
 
 // --- Data Helper Functions ---
+
+const extractVentureName = (canvas?: CanvasData, userDisplayName?: string): string => {
+  if (!canvas) return userDisplayName ? `${userDisplayName}'s Venture` : 'Unnamed Venture';
+
+  // 1. Check strict Brand fields first
+  if (canvas["Brand & Style Guides"] && canvas["Brand & Style Guides"].length < 50 && canvas["Brand & Style Guides"].length > 2) {
+      return canvas["Brand & Style Guides"].replace(/["']/g, "");
+  }
+
+  // 2. Regex for "Project Name:" or "Title:" patterns in Project Overview
+  if (canvas["Project Overview"]) {
+      const namePatterns = [
+          /Project Name:\s*([^\n\r]+)/i,
+          /Venture Name:\s*([^\n\r]+)/i,
+          /Startup Name:\s*([^\n\r]+)/i,
+          /Title:\s*([^\n\r]+)/i
+      ];
+      
+      for (const pattern of namePatterns) {
+          const match = canvas["Project Overview"].match(pattern);
+          if (match && match[1] && match[1].trim().length > 1) {
+              return match[1].trim().replace(/["']/g, "");
+          }
+      }
+      
+      // If short enough, use the whole overview as a title
+      if (canvas["Project Overview"].length < 40) return canvas["Project Overview"];
+  }
+
+  // 3. Fallbacks
+  if (canvas["Unique Value Proposition"] && canvas["Unique Value Proposition"].length < 30) return canvas["Unique Value Proposition"];
+  if (canvas["Problem"] && canvas["Problem"].length < 30) return `Project: ${canvas["Problem"]}`;
+
+  return userDisplayName ? `${userDisplayName}'s Startup` : 'Unnamed Venture';
+};
 
 // Aggregates User Profile + Workspace Canvas + Admin Metadata
 export const getAggregatedStartups = async (): Promise<StartupData[]> => {
@@ -41,15 +74,31 @@ export const getAggregatedStartups = async (): Promise<StartupData[]> => {
     const users = usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile));
     
     const startupsPromises = users.map(async (user) => {
-      // 2. Fetch Canvas Data from /workspaces/{userId}/modules/canvas
-      let canvasData: CanvasData | undefined = undefined;
+      // 1. Setup Refs
       const workspaceModulesRef = collection(db, 'workspaces', user.id, 'modules');
+      
+      // 2. Fetch Canvas Data
+      let canvasData: CanvasData | undefined = undefined;
       const canvasDocRef = doc(workspaceModulesRef, 'canvas');
-      
       const canvasSnap = await getDoc(canvasDocRef);
-      
       if (canvasSnap.exists()) {
         canvasData = canvasSnap.data() as CanvasData;
+      }
+
+      // 3. Fetch Team Data
+      let teamData: TeamData | undefined = undefined;
+      const teamDocRef = doc(workspaceModulesRef, 'team');
+      const teamSnap = await getDoc(teamDocRef);
+      if (teamSnap.exists()) {
+          teamData = teamSnap.data() as TeamData;
+      }
+
+      // 4. Fetch Mindset Data
+      let mindsetData: MindsetData | undefined = undefined;
+      const mindsetDocRef = doc(workspaceModulesRef, 'mindset');
+      const mindsetSnap = await getDoc(mindsetDocRef);
+      if (mindsetSnap.exists()) {
+          mindsetData = mindsetSnap.data() as MindsetData;
       }
 
       // Check startup role or existence of canvas
@@ -57,8 +106,8 @@ export const getAggregatedStartups = async (): Promise<StartupData[]> => {
          if (user.role !== 'startup') return null;
       }
 
-      // Check existence of other modules
-      const moduleCheckPromise = ['economics', 'productDesign', 'sales'].map(async (mod) => {
+      // 5. Check existence of other modules for progress tracking
+      const moduleCheckPromise = ['economics', 'productDesign', 'sales', 'grow'].map(async (mod) => {
           const modDocRef = doc(workspaceModulesRef, mod);
           const s = await getDoc(modDocRef);
           return { name: mod, exists: s.exists() };
@@ -67,18 +116,40 @@ export const getAggregatedStartups = async (): Promise<StartupData[]> => {
       const moduleProgress: {[key:string]: boolean} = {};
       moduleResults.forEach(r => moduleProgress[r.name] = r.exists);
       if (canvasData) moduleProgress['canvas'] = true;
+      if (teamData) moduleProgress['team'] = true;
+      if (mindsetData) moduleProgress['mindset'] = true;
 
-      // 3. Fetch Admin Metadata
+      // 6. Fetch Admin Metadata (Scores, Favorites, AI Evals)
       const metaRef = doc(db, 'startups', user.id);
       const metaSnap = await getDoc(metaRef);
       const metaData = metaSnap.exists() ? (metaSnap.data() || {}) : {};
 
-      // 4. Map to StartupData
+      // 7. Smart Name Extraction
+      const ventureName = extractVentureName(canvasData, user.displayName);
+
+      // 8. Determine Bio safely (Avoid Object Injection)
+      let bio = 'Profile not yet enriched.';
+      if (mindsetData?.profileReport) {
+          if (typeof mindsetData.profileReport === 'string') {
+              bio = mindsetData.profileReport;
+          } else if (typeof mindsetData.profileReport === 'object' && (mindsetData.profileReport as any).founderTypeDescription) {
+              // Extract string from object
+              bio = (mindsetData.profileReport as any).founderTypeDescription;
+          } else {
+             bio = "See Mindset Report for details.";
+          }
+      } else if (teamData?.["Founder Story"]) {
+          bio = teamData["Founder Story"];
+      } else if (metaData.founderBio) {
+          bio = metaData.founderBio;
+      }
+
+      // 9. Map to StartupData
       return {
         id: user.id,
-        name: user.displayName || 'Unknown Venture',
+        name: ventureName,
         founderName: user.displayName || 'Unknown Founder',
-        founderBio: metaData.founderBio || 'Profile not yet enriched.',
+        founderBio: bio,
         
         shortDescription: canvasData?.["Unique Value Proposition"] || canvasData?.["Project Overview"] || 'No Value Proposition defined yet.',
         
@@ -92,12 +163,14 @@ export const getAggregatedStartups = async (): Promise<StartupData[]> => {
         businessModel: canvasData?.["Business Model"] || canvasData?.["Pricing"] || canvasData?.["Unit Economics"] || 'Revenue streams not defined.',
         traction: canvasData?.["North Star Metric"] || canvasData?.["Product - Market Fit"] || 'Key metrics not tracked.',
         
-        readinessScore: calculateReadiness(canvasData),
+        readinessScore: calculateReadiness(canvasData, teamData, mindsetData),
         isFavorite: metaData.isFavorite || false,
         aiEvaluation: metaData.aiEvaluation || undefined,
         askAmount: metaData.askAmount || 0,
         
         canvas: canvasData,
+        team: teamData,
+        mindset: mindsetData,
         moduleProgress: moduleProgress
       } as StartupData;
     });
@@ -111,7 +184,7 @@ export const getAggregatedStartups = async (): Promise<StartupData[]> => {
   }
 };
 
-const calculateReadiness = (canvas?: CanvasData): number => {
+const calculateReadiness = (canvas?: CanvasData, team?: TeamData, mindset?: MindsetData): number => {
   if (!canvas) return 0;
   let score = 0;
   if (canvas["Problem"]) score += 10;
@@ -119,10 +192,14 @@ const calculateReadiness = (canvas?: CanvasData): number => {
   if (canvas["Unique Value Proposition"]) score += 15; 
   if (canvas["Market"] || canvas["Customer Segments"]) score += 10;
   if (canvas["Business Model"] || canvas["Revenue Streams"]) score += 15;
-  if (canvas["Unit Economics"] || canvas["Cost Structure"]) score += 10;
-  if (canvas["North Star Metric"] || canvas["Key Metrics"]) score += 10;
-  if (canvas["Unfair Advantage"]) score += 10;
-  if (canvas["Product - Market Fit"]) score += 10;
+  if (canvas["Unit Economics"] || canvas["Cost Structure"]) score += 5;
+  if (canvas["North Star Metric"] || canvas["Key Metrics"]) score += 5;
+  
+  // Team Bonus
+  if (team && (team["Founder Story"] || team["Team Members"])) score += 10; 
+  // Mindset Bonus
+  if (mindset && (mindset.goals || mindset.assessmentAnswers)) score += 20;
+
   return Math.min(score, 100);
 };
 
@@ -151,7 +228,9 @@ const TARGET_MODULES = [
     'marketResearch',
     'personas',
     'productDesign',
-    'sales'
+    'sales',
+    'team',
+    'mindset'
 ];
 
 export const getDeepProgramStats = async (): Promise<ProgramStats> => {

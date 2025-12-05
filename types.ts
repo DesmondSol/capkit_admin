@@ -41,6 +41,23 @@ export interface CanvasData {
   [key: string]: any;
 }
 
+export interface TeamData {
+  "Founder Story"?: string;
+  "Team Members"?: string; // Often a JSON string or text block
+  "Advisors"?: string;
+  "Key Roles"?: string;
+  "Culture"?: string;
+  [key: string]: any;
+}
+
+export interface MindsetData {
+    assessmentAnswers?: any; // Key-value pairs of questions/answers
+    foundingTeam?: string; // Text description
+    profileReport?: string; // Generated profile summary
+    goals?: string; // List of goals or text block
+    [key: string]: any;
+}
+
 export interface StartupData {
   id: string;
   name: string;
@@ -57,6 +74,8 @@ export interface StartupData {
   traction: string;
   askAmount: number;
   canvas?: CanvasData;
+  team?: TeamData;
+  mindset?: MindsetData;
   moduleProgress?: {
       [key: string]: boolean;
   };
@@ -87,6 +106,9 @@ export interface Investor {
   website?: string;
   status?: 'pending' | 'approved' | 'rejected';
   submittedAt?: any;
+  phone?: string;
+  bio?: string;
+  portfolio?: string;
   [key: string]: any;
 }
 

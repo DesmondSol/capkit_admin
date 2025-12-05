@@ -2,9 +2,6 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { StartupData, StartupAiEvaluation, DailyReport, ProgramStats } from "../types";
 
 // Initialize Gemini Client
-// NOTE: In a production environment, never expose API keys on the client side. 
-// This should be proxied through a backend function (Firebase Functions). 
-// For this demo, we use the provided env variable.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const MODEL_NAME = "gemini-2.5-flash";
@@ -12,22 +9,33 @@ const MODEL_NAME = "gemini-2.5-flash";
 export const evaluateStartup = async (startup: StartupData): Promise<StartupAiEvaluation> => {
   const prompt = `
     You are a Strict, Top-Tier Venture Capital Investment Expert (like a partner at Sequoia or Benchmark).
-    Evaluate this startup brutally but fairly. 
+    Evaluate this startup brutally but fairly based on the comprehensive data provided.
     
-    Startup Name: ${startup.name}
-    Description: ${startup.fullDescription}
+    --- STARTUP PROFILE ---
+    Name: ${startup.name} (Note: This name was extracted from their Business Canvas. If it looks like "Project Name", warn about branding.)
     Stage: ${startup.stage}
-    Founder: ${startup.founderName} (${startup.founderBio})
+    Sector: ${startup.sector}
+    
+    --- BUSINESS MODEL (CANVAS) ---
+    Description: ${startup.fullDescription}
     Business Model: ${startup.businessModel}
     Traction: ${startup.traction}
-    Sector: ${startup.sector}
+    
+    --- TEAM & MINDSET ---
+    Founder: ${startup.founderName}
+    Bio/Profile: ${startup.founderBio}
+    Team Details: ${JSON.stringify(startup.team || {})}
+    Founder Psychology/Mindset Report: ${JSON.stringify(startup.mindset?.profileReport || "Not available")}
+    Stated Goals: ${JSON.stringify(startup.mindset?.goals || "Not available")}
+    Assessment Answers: ${JSON.stringify(startup.mindset?.assessmentAnswers || "Not available")}
 
+    --- TASK ---
     Provide a JSON response with:
-    1. confidenceScore (0-100 integer)
+    1. confidenceScore (0-100 integer). Be strict. High score requires strong business model AND strong team/mindset.
     2. verdict (Invest, Watch, or Pass)
-    3. strengths (array of strings)
-    4. weaknesses (array of strings, be critical)
-    5. strategicAnalysis (a paragraph summary of the opportunity and risks)
+    3. strengths (array of strings - specifically mention Team/Mindset strengths if apparent)
+    4. weaknesses (array of strings, be critical about business model gaps or team inexperience)
+    5. strategicAnalysis (a paragraph summary. Analyze if the Founder's Mindset aligns with their Goals. e.g. "Founder has high ambition but goals lack specificity.")
     6. nextSteps (actionable bullet points for the startup)
   `;
 
@@ -69,7 +77,7 @@ export const evaluateStartup = async (startup: StartupData): Promise<StartupAiEv
         verdict: 'Watch',
         strengths: [],
         weaknesses: ["AI Analysis Failed"],
-        strategicAnalysis: "Could not generate analysis at this time.",
+        strategicAnalysis: "Could not generate analysis at this time. Please check API key or quota.",
         nextSteps: [],
         lastUpdated: new Date().toISOString()
     };
